@@ -26,7 +26,7 @@ export default async function Image() {
           overflow: "hidden",
         }}
       >
-        {/* Background gradient with Farcaster purple and electric blue */}
+        {/* Background gradient with dark theme suitable for token burning */}
         <div
           style={{
             position: "absolute",
@@ -34,12 +34,12 @@ export default async function Image() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: "linear-gradient(135deg, #8A63D2 0%, #1E90FF 100%)",
-            opacity: 0.9,
+            background: "linear-gradient(135deg, #2D1B69 0%, #1A1A2E 50%, #16213E 100%)",
+            opacity: 0.95,
           }}
         />
 
-        {/* Subtle pattern overlay for depth */}
+        {/* Subtle pattern overlay for depth with burning theme */}
         <div
           style={{
             position: "absolute",
@@ -48,7 +48,7 @@ export default async function Image() {
             right: 0,
             bottom: 0,
             backgroundImage:
-              "radial-gradient(circle at 20% 80%, rgba(138, 99, 210, 0.4) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(30, 144, 255, 0.4) 0%, transparent 50%)",
+              "radial-gradient(circle at 30% 70%, rgba(255, 69, 0, 0.2) 0%, transparent 50%), radial-gradient(circle at 70% 30%, rgba(255, 140, 0, 0.15) 0%, transparent 50%)",
           }}
         />
 
@@ -66,7 +66,7 @@ export default async function Image() {
             zIndex: 10,
           }}
         >
-          {/* User avatar with glow effect */}
+          {/* Token burning visual element */}
           <div
             style={{
               display: "flex",
@@ -76,44 +76,46 @@ export default async function Image() {
               position: "relative",
             }}
           >
-            {/* Glow effect */}
+            {/* Glow effect for burning theme */}
             <div
               style={{
                 position: "absolute",
-                width: "140px",
-                height: "140px",
-                borderRadius: "50%",
+                width: "160px",
+                height: "160px",
+                borderRadius: "20px",
                 background:
-                  "radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%)",
+                  "radial-gradient(circle, rgba(255, 140, 0, 0.4) 0%, rgba(255, 69, 0, 0.2) 50%, transparent 70%)",
                 filter: "blur(20px)",
               }}
             />
-            {/* Avatar container */}
+            {/* Token container with burning aesthetic */}
             <div
               style={{
-                width: "120px",
-                height: "120px",
-                borderRadius: "50%",
+                width: "140px",
+                height: "140px",
+                borderRadius: "20px",
                 overflow: "hidden",
-                border: "6px solid rgba(255, 255, 255, 0.95)",
-                backgroundColor: "#ffffff",
+                border: "4px solid rgba(255, 215, 0, 0.8)",
+                backgroundColor: "#1a1a2e",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 position: "relative",
-                boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+                boxShadow: "0 12px 40px rgba(255, 69, 0, 0.3)",
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={PROJECT_AVATAR_URL}
-                alt="User avatar"
+              {/* Token symbol */}
+              <div
                 style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
+                  fontSize: "64px",
+                  fontWeight: "900",
+                  color: "#FFD700",
+                  fontFamily: "system-ui, -apple-system, sans-serif",
+                  textShadow: "0 2px 8px rgba(0, 0, 0, 0.5)",
                 }}
-              />
+              >
+                T
+              </div>
             </div>
           </div>
 
@@ -155,46 +157,47 @@ export default async function Image() {
             {PROJECT_DESCRIPTION}
           </p>
 
-          {/* Farcaster branding element */}
+          {/* Token burning branding element */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               gap: "16px",
               padding: "20px 40px",
-              backgroundColor: "rgba(255, 255, 255, 0.2)",
+              backgroundColor: "rgba(255, 69, 0, 0.15)",
               borderRadius: "100px",
-              border: "3px solid rgba(255, 255, 255, 0.4)",
+              border: "3px solid rgba(255, 215, 0, 0.6)",
               backdropFilter: "blur(10px)",
-              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.2)",
+              boxShadow: "0 8px 32px rgba(255, 69, 0, 0.2)",
             }}
           >
-            {/* Farcaster icon */}
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 256 256"
-              fill="none"
+            {/* Token burn icon */}
+            <div
               style={{
-                display: "block",
+                width: "32px",
+                height: "32px",
+                borderRadius: "8px",
+                backgroundColor: "rgba(255, 215, 0, 0.8)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "18px",
+                fontWeight: "900",
+                color: "#1a1a2e",
               }}
             >
-              <rect width="256" height="256" rx="56" fill="#7C65C1"></rect>
-              <path
-                d="M183.296 71.68H211.968L207.872 94.208H200.704V180.224L201.02 180.232C204.266 180.396 206.848 183.081 206.848 186.368V191.488L207.164 191.496C210.41 191.66 212.992 194.345 212.992 197.632V202.752H155.648V197.632C155.648 194.345 158.229 191.66 161.476 191.496L161.792 191.488V186.368C161.792 183.081 164.373 180.396 167.62 180.232L167.936 180.224V138.24C167.936 116.184 150.056 98.304 128 98.304C105.944 98.304 88.0638 116.184 88.0638 138.24V180.224L88.3798 180.232C91.6262 180.396 94.2078 183.081 94.2078 186.368V191.488L94.5238 191.496C97.7702 191.66 100.352 194.345 100.352 197.632V202.752H43.0078V197.632C43.0078 194.345 45.5894 191.66 48.8358 191.496L49.1518 191.488V186.368C49.1518 183.081 51.7334 180.396 54.9798 180.232L55.2958 180.224V94.208H48.1278L44.0318 71.68H72.7038V54.272H183.296V71.68Z"
-                fill="white"
-              ></path>
-            </svg>
+              T
+            </div>
             <span
               style={{
                 fontSize: "26px",
                 fontWeight: "700",
-                color: "#ffffff",
+                color: "#FFD700",
                 fontFamily: "system-ui, -apple-system, sans-serif",
                 letterSpacing: "-0.5px",
               }}
             >
-              Farcaster Mini App
+              Token Burner
             </span>
           </div>
         </div>
