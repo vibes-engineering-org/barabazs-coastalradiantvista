@@ -7,24 +7,22 @@ export async function GET() {
 
   const config = {
     accountAssociation: {
-      header:
-        "eyJmaWQiOjEzNTk2LCJ0eXBlIjoiY3VzdG9keSIsImtleSI6IjB4ODE3MzE4RDZmRkY2NkExOGQ4M0ExMzc2QTc2RjZlMzBCNDNjODg4OSJ9",
-      payload:
-        "eyJkb21haW4iOiJmYXJjYXN0ZXItbWluaWFwcC10ZW1wbGF0ZS52ZXJjZWwuYXBwIn0",
-      signature:
-        "MHg5ZjkyZTdkNjRmZTNhNTE4YTEzOTBmZTdlYzAwOWQzODUzZWM2N2RmOTZiYjg1MzAwOGRlZDExNjVmOGE5OGVlNDQyYmI0MDU3OTI0ZmEzOGE3N2NlYWRiYThiMTRiN2IzMTY5N2ZjYWVlZGM3MTE1YWNiMTFmYjc2Y2EzYTc0YzFj",
+      header: "eyJmaWQiOjg2OTk5OSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDc2ZDUwQjBFMTQ3OWE5QmEyYkQ5MzVGMUU5YTI3QzBjNjQ5QzhDMTIifQ",
+      payload: "eyJkb21haW4iOiJiYXJhYmF6cy1jb2FzdGFscmFkaWFudHZpc3RhLnZlcmNlbC5hcHAifQ",
+      signature: "MHhhZjBiZjFlNmNjZWE3ZWJlZjhjNmYzZGI5OTBiOGI5MDQwZWI1ODQ4Njg4YWNmOWRiM2IyMTAzOWI2MzZlYTI4Njg4MGQxMzFhNTMyYTY2NDdmNTMwYzQ3MWZlMWJlYmRiMGY5ZmVhOWYzZTZmNzI3Nzc4NWIzZDg3ZWMyOTA1ODUxYw"
     },
     frame: {
       version: "1",
       name: PROJECT_TITLE,
       iconUrl: `${appUrl}/icon.png`,
       homeUrl: appUrl,
-      imageUrl: `${appUrl}/frames/hello/opengraph-image`,
-      ogImageUrl: `${appUrl}/frames/hello/opengraph-image`,
+      imageUrl: `${appUrl}/og.png`,
       buttonTitle: "Open",
-      splashImageUrl: `${appUrl}/splash.png`,
-      splashBackgroundColor: "#f7f7f7",
       webhookUrl: `${appUrl}/api/webhook`,
+      splashImageUrl: `${appUrl}/splash.png`,
+      splashBackgroundColor: "#555555",
+      primaryCategory: "finance",
+      tags: ["defi", "tokens", "burning", "erc20", "batch"]
     },
   };
 
