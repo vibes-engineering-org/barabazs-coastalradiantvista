@@ -17,7 +17,7 @@ export const getClientForChain = getPublicClient;
 
 /**
  * Detects NFT provider and contract info with minimal RPC calls
- * Uses multicall where possible to batch requests
+ * Uses Promise.all to batch parallel requests efficiently
  */
 export async function detectNFTProvider(
   params: MintParams,

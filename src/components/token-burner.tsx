@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
 import { Separator } from "~/components/ui/separator";
-import { formatUnits, parseUnits, encodeFunctionData, erc20Abi } from "viem";
+import { formatUnits, parseUnits, erc20Abi } from "viem";
 import { base } from "wagmi/chains";
 import { Flame, Wallet, AlertTriangle, CheckCircle, Loader2, RefreshCw } from "lucide-react";
 
@@ -135,46 +135,25 @@ export default function TokenBurner() {
     if (!publicClient || selectedTokensList.length === 0) return;
 
     try {
-      const calls = selectedTokensList.map(token => {
+      // Use batched transactions instead of multicall as per Farcaster docs
+      // Send each token burn as a separate transaction in sequence
+      for (let i = 0; i < selectedTokensList.length; i++) {
+        const token = selectedTokensList[i];
         const balance = BigInt(token.balance);
-        return {
-          to: token.contractAddress as `0x${string}`,
-          data: encodeFunctionData({
-            abi: erc20Abi,
-            functionName: 'transfer',
-            args: [BURN_ADDRESS, balance]
-          }),
-          value: 0n
-        };
-      });
+        
+        await writeContract({
+          address: token.contractAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'transfer',
+          args: [BURN_ADDRESS, balance],
+          chainId: base.id
+        });
 
-      await writeContract({
-        address: '0xcA11bde05977b3631167028862bE2a173976CA11', // Multicall3 contract
-        abi: [
-          {
-            inputs: [
-              {
-                components: [
-                  { name: 'target', type: 'address' },
-                  { name: 'callData', type: 'bytes' }
-                ],
-                name: 'calls',
-                type: 'tuple[]'
-              }
-            ],
-            name: 'aggregate',
-            outputs: [
-              { name: 'blockNumber', type: 'uint256' },
-              { name: 'returnData', type: 'bytes[]' }
-            ],
-            stateMutability: 'payable',
-            type: 'function'
-          }
-        ],
-        functionName: 'aggregate',
-        args: [calls.map(call => ({ target: call.to, callData: call.data }))],
-        chainId: base.id
-      });
+        // Wait a moment before sending next transaction to avoid nonce conflicts
+        if (i < selectedTokensList.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
     } catch (err) {
       setError(`Transaction failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
