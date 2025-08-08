@@ -47,6 +47,11 @@ import {
   parseError,
   type ParsedError,
 } from "~/lib/error-parser";
+import { 
+  createApproveAndMintSteps,
+  checkTokenApproval,
+  type TransactionStep 
+} from "~/lib/batched-transactions";
 
 /**
  * NFTMintButton - Universal NFT minting button with automatic provider detection and ERC20 approval handling
@@ -204,7 +209,7 @@ export function NFTMintButton({
   } = state;
   const { erc20Details } = priceData;
 
-  const { isSDKLoaded } = useMiniAppSdk();
+  const { isSDKLoaded, sdk } = useMiniAppSdk();
   const { isConnected, address, chain } = useAccount();
   const { connect } = useConnect();
   const { switchChain } = useSwitchChain();
@@ -564,6 +569,21 @@ export function NFTMintButton({
     detectAndValidate();
   };
 
+  // Handle approve + mint transactions (first approve, then mint in separate transactions)
+  const handleBatchedApproveAndMint = async () => {
+    if (!isConnected || !erc20Details || !contractInfo?.claim) {
+      dispatch({
+        type: "TX_ERROR",
+        payload: "Missing required information for approve and mint",
+      });
+      return;
+    }
+
+    // Since we need approval first, just do the approval step
+    // The mint will be handled after approval succeeds
+    await handleApprove();
+  };
+
   // Display helpers (quick win: centralized formatting)
   const formatPrice = (amount: bigint, decimals: number, symbol: string) => {
     if (amount === BigInt(0)) return "Free";
@@ -797,6 +817,8 @@ export function NFTMintButton({
                   ? handleConnectWallet 
                   : !isCorrectNetwork 
                   ? handleSwitchNetwork 
+                  : erc20Details?.needsApproval 
+                  ? handleBatchedApproveAndMint
                   : handleMint
               }
               size="lg"
@@ -816,7 +838,10 @@ export function NFTMintButton({
                 ) : (
                   <>
                     <Coins className="h-5 w-5 mr-2" />
-                    Mint {amount} NFT{amount > 1 ? "s" : ""}
+                    {erc20Details?.needsApproval 
+                      ? `Approve & Mint ${amount} NFT${amount > 1 ? "s" : ""}`
+                      : `Mint ${amount} NFT${amount > 1 ? "s" : ""}`
+                    }
                   </>
                 )
               ) : (
