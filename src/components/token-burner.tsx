@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useAccount, useBalance, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import { useAccount, useBalance, useSendCalls, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
 import { Separator } from "~/components/ui/separator";
-import { formatUnits, parseUnits, erc20Abi } from "viem";
+import { formatUnits, parseUnits, erc20Abi, encodeFunctionData } from "viem";
 import { base } from "wagmi/chains";
 import { Flame, Wallet, AlertTriangle, CheckCircle, Loader2, RefreshCw, Clock } from "lucide-react";
 import { Progress } from "~/components/ui/progress";
@@ -161,9 +161,9 @@ export default function TokenBurner() {
 
   const publicClient = usePublicClient();
   const { sdk, isSDKLoaded } = useMiniAppSdk();
-  const { writeContract, data: hash, isPending, error: writeError } = useWriteContract();
+  const { sendCalls, data: callsId, isPending, error: sendCallsError } = useSendCalls();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash,
+    hash: callsId?.id as `0x${string}` | undefined,
   });
 
   const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
@@ -360,28 +360,28 @@ export default function TokenBurner() {
     try {
       setError(null);
 
-      // For better UX, we'll execute burns sequentially using wagmi's pattern
-      // This avoids nonce conflicts and provides better error handling
-      console.log(`Starting sequential burn of ${selectedTokensList.length} tokens`);
+      // Create batched transaction calls for all selected tokens
+      console.log(`Starting batched burn of ${selectedTokensList.length} tokens`);
 
-      // Start with the first token
-      const token = selectedTokensList[0];
-      const balance = BigInt(token.balance);
-      
-      await writeContract({
-        address: token.contractAddress as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [BURN_ADDRESS, balance],
-        chainId: base.id
+      const calls = selectedTokensList.map(token => {
+        const balance = BigInt(token.balance);
+        return {
+          to: token.contractAddress as `0x${string}`,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: 'transfer',
+            args: [BURN_ADDRESS, balance],
+          }),
+        };
       });
-
-      // Note: For multiple tokens, we would need to implement a state machine
-      // to handle sequential burns after each transaction completes.
-      // For now, this handles the first token burn properly.
+      
+      await sendCalls({
+        calls,
+        chainId: base.id,
+      });
       
     } catch (err) {
-      setError(`Token burn failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setError(`Batched token burn failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -495,11 +495,11 @@ export default function TokenBurner() {
             </Button>
           </div>
 
-          {writeError && (
+          {sendCallsError && (
             <div className="flex items-center gap-2 p-3 bg-red-100 border border-red-200 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-red-500" />
               <p className="text-sm text-red-700">
-                {writeError.message}
+                {sendCallsError.message}
               </p>
             </div>
           )}
@@ -508,7 +508,7 @@ export default function TokenBurner() {
             <div className="flex items-center gap-2 p-3 bg-green-100 border border-green-200 rounded-lg">
               <CheckCircle className="h-4 w-4 text-green-500" />
               <p className="text-sm text-green-700">
-                Tokens burned successfully! Transaction: {hash?.slice(0, 10)}...
+                Tokens burned successfully! Transaction: {callsId?.id?.slice(0, 10)}...
               </p>
             </div>
           )}

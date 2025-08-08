@@ -1,8 +1,9 @@
-import { erc20Abi } from "viem";
+import { erc20Abi, encodeFunctionData } from "viem";
 
 /**
- * Utility for handling sequential transactions efficiently
+ * Utility for handling batched transactions efficiently
  * This follows Farcaster Mini App best practices for transaction management
+ * Uses useSendCalls for atomic batch execution
  */
 
 export interface TransactionStep {
@@ -11,6 +12,15 @@ export interface TransactionStep {
   abi: readonly any[] | any[];
   functionName: string;
   args: any[];
+  value?: bigint;
+}
+
+/**
+ * Call object format for useSendCalls
+ */
+export interface BatchCall {
+  to: `0x${string}`;
+  data: `0x${string}`;
   value?: bigint;
 }
 
@@ -64,6 +74,75 @@ export function createTokenBurnSteps(
     functionName: "transfer",
     args: [burnAddress, transfer.amount],
   }));
+}
+
+/**
+ * Convert transaction steps to batch calls for useSendCalls
+ */
+export function transactionStepsToBatchCalls(steps: TransactionStep[]): BatchCall[] {
+  return steps.map(step => ({
+    to: step.contractAddress,
+    data: encodeFunctionData({
+      abi: step.abi,
+      functionName: step.functionName,
+      args: step.args,
+    }),
+    value: step.value,
+  }));
+}
+
+/**
+ * Create batch calls for token burns
+ */
+export function createTokenBurnBatchCalls(
+  tokenTransfers: Array<{
+    tokenAddress: `0x${string}`;
+    amount: bigint;
+  }>,
+  burnAddress: `0x${string}` = "0x000000000000000000000000000000000000dEaD"
+): BatchCall[] {
+  return tokenTransfers.map(transfer => ({
+    to: transfer.tokenAddress,
+    data: encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "transfer",
+      args: [burnAddress, transfer.amount],
+    }),
+  }));
+}
+
+/**
+ * Create batch calls for approve and mint operations
+ */
+export function createApproveAndMintBatchCalls(
+  erc20TokenAddress: `0x${string}`,
+  spenderAddress: `0x${string}`,
+  approvalAmount: bigint,
+  mintContractAddress: `0x${string}`,
+  mintAbi: readonly any[] | any[],
+  mintFunctionName: string,
+  mintArgs: any[],
+  mintValue: bigint = BigInt(0)
+): BatchCall[] {
+  return [
+    {
+      to: erc20TokenAddress,
+      data: encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "approve",
+        args: [spenderAddress, approvalAmount],
+      }),
+    },
+    {
+      to: mintContractAddress,
+      data: encodeFunctionData({
+        abi: mintAbi,
+        functionName: mintFunctionName,
+        args: mintArgs,
+      }),
+      value: mintValue,
+    },
+  ];
 }
 
 /**
