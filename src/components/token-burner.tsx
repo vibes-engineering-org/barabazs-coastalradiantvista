@@ -522,14 +522,14 @@ export default function TokenBurner() {
             <CardTitle className="text-2xl font-bold">Your ERC20 Tokens</CardTitle>
             <p className="text-muted-foreground">Select tokens to burn permanently</p>
           </div>
-          {!loadingAll && tokens.length > 0 && (
+          {loadingState.phase !== 'all' && tokens.length > 0 && (
             <Badge variant="outline" className="mx-auto">
               {tokens.length} token{tokens.length > 1 ? 's' : ''} found
             </Badge>
           )}
-          {loadingAll && totalTokenCount > 0 && (
+          {loadingState.phase === 'all' && loadingState.total > 0 && (
             <Badge variant="outline" className="mx-auto">
-              {totalTokenCount} total ERC20 tokens on Base in your wallet
+              {loadingState.total} total ERC20 tokens on Base in your wallet
             </Badge>
           )}
         </CardHeader>
