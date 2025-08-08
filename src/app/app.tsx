@@ -2,6 +2,7 @@
 
 import { PROJECT_TITLE } from "~/lib/constants";
 import TokenBurner from "~/components/token-burner";
+import BatchTransfer from "~/components/batch-transfer";
 
 export default function App() {
   return (
@@ -10,20 +11,19 @@ export default function App() {
         {/* TEMPLATE_CONTENT_START - Replace content below */}
         <div className="space-y-12">
           <div className="text-center space-y-4 animate-fade-in">
-            <div className="inline-flex items-center gap-3 px-4 py-2 bg-red-100 rounded-full border border-red-200">
-              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-              <span className="text-red-800 text-sm font-medium">Token Burning Interface</span>
+            <div className="inline-flex items-center gap-3 px-4 py-2 bg-blue-100 rounded-full border border-blue-200">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span className="text-blue-800 text-sm font-medium">Batch Transfer Interface</span>
             </div>
-            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-red-800 bg-clip-text text-transparent">
-              Token Burner
+            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-blue-800 bg-clip-text text-transparent">
+              Batch Transfer
             </h1>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Permanently and irreversibly burn your ERC20 tokens from the Base network. 
-              This action cannot be undone.
+              Send ETH to multiple recipients in a single transaction with real-time status updates.
             </p>
           </div>
           <div className="animate-slide-up">
-            <TokenBurner />
+            <BatchTransfer />
           </div>
         </div>
         {/* TEMPLATE_CONTENT_END */}
