@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useAccount, useBalance, useSendCalls, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import { useAccount, useBalance, useSendCalls, usePublicClient } from "wagmi";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -162,9 +162,6 @@ export default function TokenBurner() {
   const publicClient = usePublicClient();
   const { sdk, isSDKLoaded } = useMiniAppSdk();
   const { sendCalls, data: callsId, isPending, error: sendCallsError } = useSendCalls();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: callsId?.id as `0x${string}` | undefined,
-  });
 
   const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
@@ -471,17 +468,17 @@ export default function TokenBurner() {
             <Button 
               variant="outline" 
               onClick={() => setShowConfirmation(false)}
-              disabled={isPending || isConfirming}
+              disabled={isPending}
               className="flex-1 border-gray-300 hover:bg-gray-50"
             >
               Cancel
             </Button>
             <Button 
               onClick={handleBurnTokens}
-              disabled={isPending || isConfirming}
+              disabled={isPending}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white"
             >
-              {isPending || isConfirming ? (
+              {isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Processing...
@@ -504,14 +501,6 @@ export default function TokenBurner() {
             </div>
           )}
 
-          {isSuccess && (
-            <div className="flex items-center gap-2 p-3 bg-green-100 border border-green-200 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <p className="text-sm text-green-700">
-                Tokens burned successfully! Transaction: {callsId?.id?.slice(0, 10)}...
-              </p>
-            </div>
-          )}
         </CardContent>
       </Card>
     );

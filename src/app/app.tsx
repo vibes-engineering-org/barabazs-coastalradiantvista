@@ -19,7 +19,7 @@ export default function App() {
               Batch Transfer
             </h1>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Send ETH to multiple recipients in a single transaction with real-time status updates.
+              Send ETH to multiple recipients in a single transaction.
             </p>
           </div>
           <div className="animate-slide-up">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { useSendCalls, useCallsStatus } from 'wagmi';
+import { useSendCalls } from 'wagmi';
 import { parseEther } from 'viem';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
@@ -20,18 +20,7 @@ export default function BatchTransfer() {
     { address: '', amount: '' },
     { address: '', amount: '' }
   ]);
-  const [batchId, setBatchId] = useState<string | undefined>();
-  
   const { sendCallsAsync, isPending: isSending, error: sendError } = useSendCalls();
-  
-  const { 
-    data: callsStatus, 
-    isLoading: isWaitingForStatus, 
-    error: statusError
-  } = useCallsStatus({
-    id: batchId!,
-    query: { enabled: !!batchId },
-  });
 
   const addRecipient = () => {
     setRecipients([...recipients, { address: '', amount: '' }]);
@@ -82,8 +71,7 @@ export default function BatchTransfer() {
         value: parseEther(recipient.amount)
       }));
 
-      const result = await sendCallsAsync({ calls });
-      setBatchId(result.id);
+      await sendCallsAsync({ calls });
       
       toast({
         title: "Transaction Submitted",
@@ -99,32 +87,7 @@ export default function BatchTransfer() {
     }
   };
 
-  // Handle batch status updates
-  if (callsStatus?.status === 'success') {
-    toast({
-      title: "Batch Transfer Successful",
-      description: "All transfers in your batch have been confirmed on-chain",
-    });
-  }
 
-  if (callsStatus?.status === 'failure' || statusError) {
-    toast({
-      title: "Batch Transfer Failed",
-      description: "The batch transfer failed to complete",
-      variant: "destructive"
-    });
-  }
-
-  const getTransactionStatus = () => {
-    if (isSending) return { icon: Loader2, text: "Submitting batch transfer...", color: "text-blue-600" };
-    if (isWaitingForStatus) return { icon: Loader2, text: "Waiting for confirmation...", color: "text-yellow-600" };
-    if (callsStatus?.status === 'success') return { icon: CheckCircle2, text: "Batch transfer successful!", color: "text-green-600" };
-    if (callsStatus?.status === 'failure' || sendError || statusError) return { icon: XCircle, text: "Batch transfer failed", color: "text-red-600" };
-    if (callsStatus?.status === 'pending') return { icon: Loader2, text: "Processing batch transfer...", color: "text-yellow-600" };
-    return null;
-  };
-
-  const status = getTransactionStatus();
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -176,32 +139,16 @@ export default function BatchTransfer() {
           Add Recipient
         </Button>
 
-        {status && (
-          <div className={`flex items-center gap-2 p-3 rounded-lg bg-gray-50 ${status.color}`}>
-            <status.icon className={`h-4 w-4 ${status.icon === Loader2 ? 'animate-spin' : ''}`} />
-            <span className="text-sm font-medium">{status.text}</span>
-          </div>
-        )}
-
-        {batchId && (
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 mb-1">Batch ID:</p>
-            <p className="text-xs font-mono break-all">{batchId}</p>
-            {callsStatus?.status && (
-              <p className="text-sm text-gray-600 mt-2">Status: <span className="font-medium">{callsStatus.status}</span></p>
-            )}
-          </div>
-        )}
 
         <Button 
           onClick={handleBatchTransfer}
-          disabled={!canSubmit || isSending || isWaitingForStatus}
+          disabled={!canSubmit || isSending}
           className="w-full"
         >
-          {isSending || isWaitingForStatus ? (
+          {isSending ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              {isSending ? 'Submitting...' : 'Confirming...'}
+              Submitting...
             </>
           ) : (
             <>
