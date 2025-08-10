@@ -174,6 +174,13 @@ export default function TokenBurner() {
     },
   });
 
+  // Reset selected tokens when burn is successful
+  useEffect(() => {
+    if (isCallsSuccess && (callsStatus as any)?.status === 'success') {
+      setSelectedTokens(new Set());
+    }
+  }, [isCallsSuccess, callsStatus]);
+
   const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
 
