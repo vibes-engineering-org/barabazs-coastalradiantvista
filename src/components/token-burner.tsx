@@ -533,19 +533,36 @@ export default function TokenBurner() {
               <div className="flex items-center gap-2 p-3 bg-green-100 border border-green-200 rounded-lg">
                 <CheckCircle className="h-4 w-4 text-green-500" />
                 <p className="text-sm text-green-700">
-                  Tokens burned successfully! All {selectedTokensList.length} token{selectedTokensList.length > 1 ? 's' : ''} have been sent to the burn address.
+                  Tokens burned successfully! They have been sent to the burn address.
                 </p>
               </div>
-              <Button 
-                onClick={() => {
-                  setShowConfirmation(false);
-                  setSelectedTokens(new Set());
-                  fetchPriorityTokens();
-                }}
-                className="w-full"
-              >
-                Burn More Tokens
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => {
+                    setShowConfirmation(false);
+                    setSelectedTokens(new Set());
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setShowConfirmation(false);
+                    setSelectedTokens(new Set());
+                    if (allTokensLoaded) {
+                      fetchAllTokens();
+                    } else {
+                      fetchPriorityTokens();
+                    }
+                  }}
+                  className="flex-1"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh Tokens
+                </Button>
+              </div>
             </div>
           )}
 
@@ -557,13 +574,29 @@ export default function TokenBurner() {
                   Token burn failed. The transaction was not successful.
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Button 
                   variant="outline"
                   onClick={() => setShowConfirmation(false)}
                   className="flex-1"
                 >
                   Go Back
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setShowConfirmation(false);
+                    setSelectedTokens(new Set());
+                    if (allTokensLoaded) {
+                      fetchAllTokens();
+                    } else {
+                      fetchPriorityTokens();
+                    }
+                  }}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh
                 </Button>
                 <Button 
                   onClick={handleBurnTokens}
