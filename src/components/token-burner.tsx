@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useAccount, useBalance, useSendCalls, useWaitForTransactionReceipt, usePublicClient } from "wagmi";
+import { useAccount, useBalance, useSendCalls, useWaitForCallsStatus, usePublicClient } from "wagmi";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -162,8 +162,16 @@ export default function TokenBurner() {
   const publicClient = usePublicClient();
   const { sdk, isSDKLoaded } = useMiniAppSdk();
   const { sendCalls, data: callsId, isPending, error: sendCallsError } = useSendCalls();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
-    hash: callsId?.id as `0x${string}` | undefined,
+  const { 
+    data: callsStatus, 
+    isLoading: isConfirming, 
+    isSuccess: isCallsSuccess, 
+    error: callsStatusError 
+  } = useWaitForCallsStatus({
+    id: callsId?.id,
+    query: {
+      enabled: !!callsId?.id,
+    },
   });
 
   const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
@@ -495,21 +503,69 @@ export default function TokenBurner() {
             </Button>
           </div>
 
-          {sendCallsError && (
+          {(sendCallsError || callsStatusError) && (
             <div className="flex items-center gap-2 p-3 bg-red-100 border border-red-200 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-red-500" />
               <p className="text-sm text-red-700">
-                {sendCallsError.message}
+                {sendCallsError?.message || callsStatusError?.message}
               </p>
             </div>
           )}
 
-          {isSuccess && (
-            <div className="flex items-center gap-2 p-3 bg-green-100 border border-green-200 rounded-lg">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <p className="text-sm text-green-700">
-                Tokens burned successfully! Transaction: {callsId?.id?.slice(0, 10)}...
+          {isConfirming && callsId && (
+            <div className="flex items-center gap-2 p-3 bg-blue-100 border border-blue-200 rounded-lg">
+              <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+              <p className="text-sm text-blue-700">
+                Waiting for burn transaction to complete... Status: {(callsStatus as any)?.status || 'pending'}
               </p>
+            </div>
+          )}
+
+          {(callsStatus as any)?.status === 'success' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-3 bg-green-100 border border-green-200 rounded-lg">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <p className="text-sm text-green-700">
+                  Tokens burned successfully! All {selectedTokensList.length} token{selectedTokensList.length > 1 ? 's' : ''} have been sent to the burn address.
+                </p>
+              </div>
+              <Button 
+                onClick={() => {
+                  setShowConfirmation(false);
+                  setSelectedTokens(new Set());
+                  fetchPriorityTokens();
+                }}
+                className="w-full"
+              >
+                Burn More Tokens
+              </Button>
+            </div>
+          )}
+
+          {(callsStatus as any)?.status === 'failure' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 p-3 bg-red-100 border border-red-200 rounded-lg">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <p className="text-sm text-red-700">
+                  Token burn failed. The transaction was not successful.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowConfirmation(false)}
+                  className="flex-1"
+                >
+                  Go Back
+                </Button>
+                <Button 
+                  onClick={handleBurnTokens}
+                  disabled={isPending || isConfirming}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Try Again
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>
