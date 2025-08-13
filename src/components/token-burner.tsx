@@ -9,6 +9,7 @@ import { Badge } from "~/components/ui/badge";
 import { Separator } from "~/components/ui/separator";
 import { formatUnits, erc20Abi, encodeFunctionData } from "viem";
 import { base } from "wagmi/chains";
+import { farcasterFrame } from "@farcaster/miniapp-wagmi-connector";
 import { Flame, Wallet, AlertTriangle, CheckCircle, Loader2, RefreshCw, Clock } from "lucide-react";
 import { Progress } from "~/components/ui/progress";
 import { useMiniAppSdk } from "~/hooks/use-miniapp-sdk";
@@ -432,10 +433,14 @@ export default function TokenBurner() {
       setError(`Batched token burn failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
-
-  const formatTokenBalance = (balance: string, decimals: number) => {
-    const balanceBigInt = BigInt(balance);
-    return formatUnits(balanceBigInt, decimals);
+  // Handle manual wallet connection
+  const handleConnect = () => {
+    try {
+      const connector = farcasterFrame();
+      connect({ connector });
+    } catch (err) {
+      setError(`Failed to connect wallet: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
   };
 
   if (!isConnected) {
@@ -451,6 +456,10 @@ export default function TokenBurner() {
               Connect your wallet to view your ERC20 tokens and burn them permanently
             </p>
           </div>
+          <Button onClick={handleConnect} size="lg" className="mt-6">
+            <Wallet className="mr-2 h-4 w-4" />
+            Connect Wallet
+          </Button>
         </CardContent>
       </Card>
     );
