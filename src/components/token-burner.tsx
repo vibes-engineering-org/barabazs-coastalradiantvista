@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useAccount, useSendCalls, useWaitForCallsStatus, usePublicClient, useReadContracts, useConnect } from "wagmi";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useAccount, useSendCalls, useWaitForCallsStatus, usePublicClient, useConnect } from "wagmi";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -23,11 +23,6 @@ interface LoadingState {
   retryCount: number;
 }
 
-interface IncompleteToken {
-  contractAddress: string;
-  balance: string;
-  needsOnchainFetch: true;
-}
 
 const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
@@ -37,7 +32,6 @@ export default function TokenBurner() {
   const { connect } = useConnect();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [selectedTokens, setSelectedTokens] = useState<Set<string>>(new Set());
-  const [incompleteTokens, setIncompleteTokens] = useState<IncompleteToken[]>([]);
   const [loadingState, setLoadingState] = useState<LoadingState>({
     phase: 'idle',
     progress: 0,
@@ -58,46 +52,6 @@ export default function TokenBurner() {
     }
   }, [isSDKLoaded]);
 
-  // Prepare contract calls for incomplete tokens
-  const contractCalls = useMemo(() => {
-    if (incompleteTokens.length === 0) return [];
-
-    const calls: any[] = [];
-    incompleteTokens.forEach(token => {
-      calls.push(
-        // name()
-        {
-          address: token.contractAddress as `0x${string}`,
-          abi: erc20Abi,
-          functionName: 'name',
-        },
-        // symbol()
-        {
-          address: token.contractAddress as `0x${string}`,
-          abi: erc20Abi,
-          functionName: 'symbol',
-        },
-        // decimals()
-        {
-          address: token.contractAddress as `0x${string}`,
-          abi: erc20Abi,
-          functionName: 'decimals',
-        }
-      );
-    });
-    return calls;
-  }, [incompleteTokens]);
-
-  // Batch read onchain metadata for incomplete tokens
-  const {
-    data: onchainResults,
-    isSuccess: isOnchainSuccess
-  } = useReadContracts({
-    contracts: contractCalls,
-    query: {
-      enabled: contractCalls.length > 0,
-    },
-  });
   const { sendCalls, data: callsId, isPending, error: sendCallsError } = useSendCalls();
   const {
     data: callsStatus,
@@ -118,65 +72,6 @@ export default function TokenBurner() {
     }
   }, [isCallsSuccess, callsStatus]);
 
-  // Process onchain metadata results
-  useEffect(() => {
-    if (isOnchainSuccess && onchainResults && incompleteTokens.length > 0) {
-      console.debug('Processing onchain metadata results for', incompleteTokens.length, 'tokens');
-
-      const completedTokens: Token[] = [];
-
-      incompleteTokens.forEach((incompleteToken, index) => {
-        const baseIndex = index * 3; // Each token has 3 calls (name, symbol, decimals)
-
-        const nameResult = onchainResults[baseIndex];
-        const symbolResult = onchainResults[baseIndex + 1];
-        const decimalsResult = onchainResults[baseIndex + 2];
-
-        // Check if all three calls succeeded
-        if (
-          nameResult?.status === 'success' &&
-          symbolResult?.status === 'success' &&
-          decimalsResult?.status === 'success' &&
-          nameResult.result &&
-          symbolResult.result &&
-          decimalsResult.result !== null
-        ) {
-          const token: Token = {
-            contractAddress: incompleteToken.contractAddress,
-            name: nameResult.result as string,
-            symbol: symbolResult.result as string,
-            balance: incompleteToken.balance,
-            decimals: decimalsResult.result as number,
-          };
-          completedTokens.push(token);
-          console.debug(`Successfully fetched onchain metadata for ${token.symbol} (${token.name})`);
-        } else {
-          console.warn(`Failed to fetch onchain metadata for ${incompleteToken.contractAddress}`);
-        }
-      });
-
-      if (completedTokens.length > 0) {
-        // Add completed tokens to existing tokens and sort
-        setTokens(prevTokens => {
-          const allTokens = [...prevTokens, ...completedTokens];
-          return allTokens.sort((a, b) => a.symbol.localeCompare(b.symbol));
-        });
-
-        // Clear processed incomplete tokens
-        setIncompleteTokens([]);
-
-        // Clear loading state
-        setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
-
-        console.debug(`Added ${completedTokens.length} tokens with onchain metadata`);
-      } else if (incompleteTokens.length > 0) {
-        // If there were incomplete tokens but none could be processed, clear them and loading state
-        setIncompleteTokens([]);
-        setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
-        console.warn('Failed to fetch onchain metadata for all incomplete tokens');
-      }
-    }
-  }, [isOnchainSuccess, onchainResults, incompleteTokens]);
 
   const fetchAllTokens = useCallback(async () => {
     if (!address) return;
@@ -205,7 +100,6 @@ export default function TokenBurner() {
       // console.debug(`API returned ${allTokens.length} tokens (source: ${source})`);
 
       setTokens(allTokens);
-      setIncompleteTokens([]);
 
       setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
 
