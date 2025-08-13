@@ -246,7 +246,8 @@ export async function GET(
 ) {
   const { address } = await params;
   const zapperApiKey = process.env.ZAPPER_API_KEY;
-  const alchemyApiKey = process.env.ALCHEMY_API_KEY;
+  const alchemyApiKey =
+    process.env.ALCHEMY_API_KEY || process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
   if (!address) {
     return NextResponse.json({ error: "Address is required" }, { status: 400 });
