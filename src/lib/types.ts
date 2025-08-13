@@ -72,3 +72,11 @@ export interface ValidationResult {
   errors: string[];
   warnings: string[];
 }
+
+export interface Token {
+  contractAddress: string;
+  name: string;
+  symbol: string;
+  balance: string;
+  balanceFormatted: string;
+}

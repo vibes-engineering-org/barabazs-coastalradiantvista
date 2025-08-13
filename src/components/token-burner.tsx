@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useAccount, useSendCalls, useWaitForCallsStatus, usePublicClient, useReadContracts } from "wagmi";
+import { useAccount, useSendCalls, useWaitForCallsStatus, usePublicClient, useReadContracts, useConnect } from "wagmi";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -13,15 +13,7 @@ import { farcasterFrame } from "@farcaster/miniapp-wagmi-connector";
 import { Flame, Wallet, AlertTriangle, CheckCircle, Loader2, RefreshCw, Clock } from "lucide-react";
 import { Progress } from "~/components/ui/progress";
 import { useMiniAppSdk } from "~/hooks/use-miniapp-sdk";
-
-interface Token {
-  contractAddress: string;
-  name: string;
-  symbol: string;
-  balance: string;
-  decimals: number;
-  logo?: string;
-}
+import { Token } from "~/lib/types";
 
 interface LoadingState {
   phase: 'idle' | 'all';
@@ -29,12 +21,6 @@ interface LoadingState {
   total: number;
   message: string;
   retryCount: number;
-}
-
-interface TokenCache {
-  symbol: string;
-  name: string;
-  decimals: number;
 }
 
 interface IncompleteToken {
@@ -45,103 +31,10 @@ interface IncompleteToken {
 
 const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 
-const TOKEN_METADATA_CACHE: Record<string, TokenCache> = {
-  '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': { symbol: 'USDC', name: 'USD Coin', decimals: 6 },
-  '0x4ed4e862860bed51a9570b96d89af5e1b0efefed': { symbol: 'DEGEN', name: 'Degen', decimals: 18 },
-  '0x4200000000000000000000000000000000000006': { symbol: 'WETH', name: 'Wrapped Ether', decimals: 18 },
-  '0x1111111111166b7fe7bd91427724b487980afc69': { symbol: 'ZORA', name: 'Zora', decimals: 18 },
-  '0x44ff8620b8ca30902395a7bd3f2407e1a091bf73': { symbol: 'VIRTUAL', name: 'Virtuals Protocol', decimals: 18 },
-  '0x58d97b57bb95320f9a05dc918aef65434969c2b2': { symbol: 'MORPHO', name: 'Morpho Token', decimals: 18 },
-  '0x1abaea1f7c830bd89acc67ec4af516284b1bc33c': { symbol: 'EURC', name: 'Euro Coin', decimals: 6 },
-  '0x40d16fc0246ad3160ccc09b8d0d3a2cd28ae6c2f': { symbol: 'GHO', name: 'GHO Token', decimals: 18 },
-  '0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22': { symbol: 'cbETH', name: 'Coinbase Wrapped ETH', decimals: 18 },
-  '0x50c5725949a6f0c72e6c4a641f24049a917db0cb': { symbol: 'DAI', name: 'Dai Stablecoin', decimals: 18 },
-};
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, onRetry?: (retryCount: number, maxRetries: number) => void): Promise<Response> => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      console.debug(`API call attempt ${i + 1}/${retries}:`, options.body);
-      const response = await fetch(url, options);
-      if (response.ok) {
-        console.debug('API call successful');
-        return response;
-      }
-      throw new Error(`HTTP ${response.status}`);
-    } catch (err) {
-      console.debug(`API call attempt ${i + 1} failed:`, err);
-      if (i === retries - 1) throw err;
-      const delay = Math.pow(2, i) * 1000; // 1s, 2s, 4s
-      console.debug(`Retrying in ${delay}ms...`);
-      if (onRetry) {
-        onRetry(i + 1, retries);
-      }
-      await sleep(delay);
-    }
-  }
-  throw new Error('Max retries exceeded');
-};
-
-const fetchTokenMetadata = async (contractAddress: string, alchemyApiKey: string, onRetry?: (retryCount: number, maxRetries: number) => void): Promise<Token | IncompleteToken | null> => {
-  const lowerAddress = contractAddress.toLowerCase();
-
-  // Use cached metadata if available
-  const cachedMetadata = TOKEN_METADATA_CACHE[lowerAddress];
-  if (cachedMetadata) {
-    console.debug(`Using cached metadata for ${contractAddress}`);
-    return {
-      contractAddress,
-      name: cachedMetadata.name,
-      symbol: cachedMetadata.symbol,
-      balance: '0',
-      decimals: cachedMetadata.decimals,
-    };
-  }
-
-  try {
-    const response = await fetchWithRetry(`https://base-mainnet.g.alchemy.com/v2/${alchemyApiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'alchemy_getTokenMetadata',
-        params: [contractAddress]
-      })
-    }, 3, onRetry);
-
-    const metadataData = await response.json();
-    const metadata = metadataData.result;
-
-    if (!metadata || !metadata.name || !metadata.symbol || metadata.decimals === null) {
-      console.warn(`Incomplete metadata for ${contractAddress}:`, metadata);
-      // Return incomplete token to be fetched onchain later
-      return {
-        contractAddress,
-        balance: '0', // Will be set later
-        needsOnchainFetch: true
-      };
-    }
-    if (metadata) {
-      return {
-        contractAddress,
-        name: metadata.name,
-        symbol: metadata.symbol,
-        balance: '0',
-        decimals: metadata.decimals,
-        logo: metadata.logo,
-      };
-    }
-  } catch (err) {
-    console.error(`Error fetching metadata for ${contractAddress}:`, err);
-  }
-  return null;
-};
 
 export default function TokenBurner() {
   const { address, isConnected, chainId } = useAccount();
+  const { connect } = useConnect();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [selectedTokens, setSelectedTokens] = useState<Set<string>>(new Set());
   const [incompleteTokens, setIncompleteTokens] = useState<IncompleteToken[]>([]);
@@ -156,7 +49,14 @@ export default function TokenBurner() {
   const [error, setError] = useState<string | null>(null);
 
   const publicClient = usePublicClient();
-  const { sdk, isSDKLoaded } = useMiniAppSdk();
+  const { isSDKLoaded } = useMiniAppSdk();
+  useEffect(() => {
+    if (!isSDKLoaded) {
+      console.warn("Mini App SDK is not loaded yet. Please wait.");
+    } else {
+      console.debug("Mini App SDK is loaded, ready to use.");
+    }
+  }, [isSDKLoaded]);
 
   // Prepare contract calls for incomplete tokens
   const contractCalls = useMemo(() => {
@@ -191,7 +91,6 @@ export default function TokenBurner() {
   // Batch read onchain metadata for incomplete tokens
   const {
     data: onchainResults,
-    isLoading: isLoadingOnchain,
     isSuccess: isOnchainSuccess
   } = useReadContracts({
     contracts: contractCalls,
@@ -279,115 +178,49 @@ export default function TokenBurner() {
     }
   }, [isOnchainSuccess, onchainResults, incompleteTokens]);
 
-  const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
-
   const fetchAllTokens = useCallback(async () => {
-    if (!address || !alchemyApiKey) return;
+    if (!address) return;
 
     console.debug('Starting full token scan for address:', address);
     setLoadingState({
       phase: 'all',
       progress: 0,
-      total: 100, // Approximate, will be updated
+      total: 100,
       message: 'Loading all tokens...',
       retryCount: 0
     });
     setError(null);
 
     try {
-      const response = await fetchWithRetry(`https://base-mainnet.g.alchemy.com/v2/${alchemyApiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'alchemy_getTokenBalances',
-          params: [address, 'erc20']
-        })
-      }, 3, (retryCount, maxRetries) => {
-        setLoadingState(prev => ({
-          ...prev,
-          retryCount,
-          message: `Retrying... (${retryCount}/${maxRetries})`
-        }));
-      });
+      const response = await fetch(`/api/tokens/${address}`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
 
       const data = await response.json();
+      const { tokens: allTokens, source } = data;
 
-      if (data.error) {
-        throw new Error(`API Error: ${data.error.message}`);
-      }
+      // console.debug(`API returned ${allTokens.length} tokens (source: ${source})`);
 
-      const tokenBalances = data.result?.tokenBalances || [];
-      const tokensWithBalance = tokenBalances.filter((token: any) => parseInt(token.tokenBalance, 16) > 0);
+      setTokens(allTokens);
+      setIncompleteTokens([]);
 
-      setLoadingState(prev => ({ ...prev, total: tokensWithBalance.length }));
+      setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
 
-      const tokensWithMetadata: Token[] = [];
-      const incompleteTokensList: IncompleteToken[] = [];
-      let processed = 0;
-
-      for (const token of tokensWithBalance) {
-        const metadata = await fetchTokenMetadata(token.contractAddress, alchemyApiKey, (retryCount, maxRetries) => {
-          setLoadingState(prev => ({
-            ...prev,
-            retryCount,
-            message: `Retrying metadata fetch... (${retryCount}/${maxRetries})`
-          }));
-        });
-
-        if (metadata) {
-          if ('needsOnchainFetch' in metadata) {
-            // This is an incomplete token
-            metadata.balance = token.tokenBalance;
-            incompleteTokensList.push(metadata);
-            console.debug(`Token ${token.contractAddress} marked for onchain metadata fetch`);
-          } else {
-            // This is a complete token
-            metadata.balance = token.tokenBalance;
-            tokensWithMetadata.push(metadata);
-          }
-        }
-
-        processed++;
-        setLoadingState(prev => ({
-          ...prev,
-          progress: processed,
-          message: `Loading ${processed} of ${tokensWithBalance.length} tokens...`
-        }));
-      }
-
-      console.debug(`Found ${tokensWithMetadata.length} tokens with complete metadata, ${incompleteTokensList.length} tokens need onchain fetch`);
-
-      // Sort complete tokens alphabetically by symbol
-      const sortedTokens = tokensWithMetadata.sort((a, b) => {
-        return a.symbol.localeCompare(b.symbol);
-      });
-
-      setTokens(sortedTokens);
-      setIncompleteTokens(incompleteTokensList);
-
-      // If there are incomplete tokens, keep loading state active for onchain fetch
-      if (incompleteTokensList.length > 0) {
-        setLoadingState(prev => ({
-          ...prev,
-          message: `Fetching metadata for ${incompleteTokensList.length} tokens onchain...`
-        }));
-      } else {
-        setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
-      }
     } catch (err) {
-      console.error('Full token fetch failed:', err);
-      setError(`Failed to fetch all tokens: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      console.error('Token fetch failed:', err);
+      setError(`Failed to fetch tokens: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
     }
-  }, [address, alchemyApiKey]);
+  }, [address]);
 
   useEffect(() => {
     if (isConnected && address) {
-      fetchAllTokens();
+      void fetchAllTokens();
     }
-  }, [isConnected, address, alchemyApiKey, fetchAllTokens]);
+  }, [isConnected, address, fetchAllTokens]);
 
   const selectedTokensList = useMemo(() => {
     return tokens.filter(token => selectedTokens.has(token.contractAddress));
@@ -430,6 +263,7 @@ export default function TokenBurner() {
       });
 
     } catch (err) {
+      console.error('Batched token burn failed:', err);
       setError(`Batched token burn failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
@@ -514,7 +348,7 @@ export default function TokenBurner() {
                 </div>
                 <div className="text-right space-y-1">
                   <p className="font-bold text-lg text-red-600">
-                    {parseFloat(formatTokenBalance(token.balance, token.decimals)).toLocaleString()}
+                    {token.balanceFormatted}
                   </p>
                   <p className="text-xs text-muted-foreground">to be burned</p>
                 </div>
@@ -593,7 +427,7 @@ export default function TokenBurner() {
                   onClick={() => {
                     setShowConfirmation(false);
                     setSelectedTokens(new Set());
-                    fetchAllTokens();
+                    void fetchAllTokens();
                   }}
                   className="flex-1"
                 >
@@ -624,7 +458,7 @@ export default function TokenBurner() {
                   onClick={() => {
                     setShowConfirmation(false);
                     setSelectedTokens(new Set());
-                    fetchAllTokens();
+                    void fetchAllTokens();
                   }}
                   variant="outline"
                   className="flex-1"
@@ -708,18 +542,6 @@ export default function TokenBurner() {
               <div className="space-y-2 flex-1">
                 <p className="text-red-700 text-sm font-medium">Error loading tokens</p>
                 <p className="text-red-600 text-sm">{error}</p>
-                <div className="flex gap-2">
-                  {!alchemyApiKey && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => window.open('https://docs.alchemy.com/docs/alchemy-quickstart-guide', '_blank')}
-                      className="text-blue-600 hover:bg-blue-50"
-                    >
-                      Get API Key
-                    </Button>
-                  )}
-                </div>
               </div>
             </div>
           )}
@@ -733,7 +555,7 @@ export default function TokenBurner() {
               </div>
               <Button
                 variant="outline"
-                onClick={fetchAllTokens}
+                onClick={() => void fetchAllTokens()}
                 className="mt-4"
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -775,7 +597,7 @@ export default function TokenBurner() {
                         </div>
                         <div className="text-right space-y-1 flex-shrink-0">
                           <p className="font-bold text-lg">
-                            {parseFloat(formatTokenBalance(token.balance, token.decimals)).toLocaleString()}
+                            {token.balanceFormatted}
                           </p>
                           <p className="text-xs text-muted-foreground">available</p>
                         </div>

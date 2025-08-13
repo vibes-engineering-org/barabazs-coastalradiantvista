@@ -153,11 +153,12 @@ Required:
 - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anonymous key
 - `VIBES_ENGINEERING_NOTIFICATION_BACKEND_ENDPOINT`: Webhook backend endpoint
+- `ZAPPER_API_KEY`: Zapper API key for comprehensive token balance data (primary)
+- `ALCHEMY_KEY`: Alchemy API key for enhanced blockchain operations (fallback (optional))
 
 Optional:
 - `NEXT_PUBLIC_POSTHOG_KEY`: PostHog analytics key
 - `NEXT_PUBLIC_POSTHOG_HOST`: PostHog host
-- `NEXT_PUBLIC_ALCHEMY_KEY`: Alchemy API key for enhanced blockchain operations
 
 ## Critical Implementation Notes
 
