@@ -1,21 +1,17 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { useAccount, useBalance, useSendCalls, useWaitForCallsStatus, usePublicClient } from "wagmi";
+import { useAccount, useSendCalls, useWaitForCallsStatus, usePublicClient, useReadContracts } from "wagmi";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
 import { Separator } from "~/components/ui/separator";
-import { formatUnits, parseUnits, erc20Abi, encodeFunctionData } from "viem";
+import { formatUnits, erc20Abi, encodeFunctionData } from "viem";
 import { base } from "wagmi/chains";
 import { Flame, Wallet, AlertTriangle, CheckCircle, Loader2, RefreshCw, Clock } from "lucide-react";
 import { Progress } from "~/components/ui/progress";
 import { useMiniAppSdk } from "~/hooks/use-miniapp-sdk";
-import { 
-  createTokenBurnSteps,
-  type TransactionStep 
-} from "~/lib/batched-transactions";
 
 interface Token {
   contractAddress: string;
@@ -38,6 +34,12 @@ interface TokenCache {
   symbol: string;
   name: string;
   decimals: number;
+}
+
+interface IncompleteToken {
+  contractAddress: string;
+  balance: string;
+  needsOnchainFetch: true;
 }
 
 const BURN_ADDRESS = "0x000000000000000000000000000000000000dEaD";
@@ -81,9 +83,9 @@ const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, on
   throw new Error('Max retries exceeded');
 };
 
-const fetchTokenMetadata = async (contractAddress: string, alchemyApiKey: string, onRetry?: (retryCount: number, maxRetries: number) => void): Promise<Token | null> => {
+const fetchTokenMetadata = async (contractAddress: string, alchemyApiKey: string, onRetry?: (retryCount: number, maxRetries: number) => void): Promise<Token | IncompleteToken | null> => {
   const lowerAddress = contractAddress.toLowerCase();
-  
+
   // Use cached metadata if available
   const cachedMetadata = TOKEN_METADATA_CACHE[lowerAddress];
   if (cachedMetadata) {
@@ -112,13 +114,22 @@ const fetchTokenMetadata = async (contractAddress: string, alchemyApiKey: string
     const metadataData = await response.json();
     const metadata = metadataData.result;
 
+    if (!metadata || !metadata.name || !metadata.symbol || metadata.decimals === null) {
+      console.warn(`Incomplete metadata for ${contractAddress}:`, metadata);
+      // Return incomplete token to be fetched onchain later
+      return {
+        contractAddress,
+        balance: '0', // Will be set later
+        needsOnchainFetch: true
+      };
+    }
     if (metadata) {
       return {
         contractAddress,
-        name: metadata.name || "Unknown Token",
-        symbol: metadata.symbol || "UNKNOWN",
+        name: metadata.name,
+        symbol: metadata.symbol,
         balance: '0',
-        decimals: metadata.decimals || 18,
+        decimals: metadata.decimals,
         logo: metadata.logo,
       };
     }
@@ -132,6 +143,7 @@ export default function TokenBurner() {
   const { address, isConnected, chainId } = useAccount();
   const [tokens, setTokens] = useState<Token[]>([]);
   const [selectedTokens, setSelectedTokens] = useState<Set<string>>(new Set());
+  const [incompleteTokens, setIncompleteTokens] = useState<IncompleteToken[]>([]);
   const [loadingState, setLoadingState] = useState<LoadingState>({
     phase: 'idle',
     progress: 0,
@@ -144,12 +156,54 @@ export default function TokenBurner() {
 
   const publicClient = usePublicClient();
   const { sdk, isSDKLoaded } = useMiniAppSdk();
+
+  // Prepare contract calls for incomplete tokens
+  const contractCalls = useMemo(() => {
+    if (incompleteTokens.length === 0) return [];
+
+    const calls: any[] = [];
+    incompleteTokens.forEach(token => {
+      calls.push(
+        // name()
+        {
+          address: token.contractAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'name',
+        },
+        // symbol()
+        {
+          address: token.contractAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'symbol',
+        },
+        // decimals()
+        {
+          address: token.contractAddress as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'decimals',
+        }
+      );
+    });
+    return calls;
+  }, [incompleteTokens]);
+
+  // Batch read onchain metadata for incomplete tokens
+  const {
+    data: onchainResults,
+    isLoading: isLoadingOnchain,
+    isSuccess: isOnchainSuccess
+  } = useReadContracts({
+    contracts: contractCalls,
+    query: {
+      enabled: contractCalls.length > 0,
+    },
+  });
   const { sendCalls, data: callsId, isPending, error: sendCallsError } = useSendCalls();
-  const { 
-    data: callsStatus, 
-    isLoading: isConfirming, 
-    isSuccess: isCallsSuccess, 
-    error: callsStatusError 
+  const {
+    data: callsStatus,
+    isLoading: isConfirming,
+    isSuccess: isCallsSuccess,
+    error: callsStatusError
   } = useWaitForCallsStatus({
     id: callsId?.id,
     query: {
@@ -164,11 +218,71 @@ export default function TokenBurner() {
     }
   }, [isCallsSuccess, callsStatus]);
 
+  // Process onchain metadata results
+  useEffect(() => {
+    if (isOnchainSuccess && onchainResults && incompleteTokens.length > 0) {
+      console.debug('Processing onchain metadata results for', incompleteTokens.length, 'tokens');
+
+      const completedTokens: Token[] = [];
+
+      incompleteTokens.forEach((incompleteToken, index) => {
+        const baseIndex = index * 3; // Each token has 3 calls (name, symbol, decimals)
+
+        const nameResult = onchainResults[baseIndex];
+        const symbolResult = onchainResults[baseIndex + 1];
+        const decimalsResult = onchainResults[baseIndex + 2];
+
+        // Check if all three calls succeeded
+        if (
+          nameResult?.status === 'success' &&
+          symbolResult?.status === 'success' &&
+          decimalsResult?.status === 'success' &&
+          nameResult.result &&
+          symbolResult.result &&
+          decimalsResult.result !== null
+        ) {
+          const token: Token = {
+            contractAddress: incompleteToken.contractAddress,
+            name: nameResult.result as string,
+            symbol: symbolResult.result as string,
+            balance: incompleteToken.balance,
+            decimals: decimalsResult.result as number,
+          };
+          completedTokens.push(token);
+          console.debug(`Successfully fetched onchain metadata for ${token.symbol} (${token.name})`);
+        } else {
+          console.warn(`Failed to fetch onchain metadata for ${incompleteToken.contractAddress}`);
+        }
+      });
+
+      if (completedTokens.length > 0) {
+        // Add completed tokens to existing tokens and sort
+        setTokens(prevTokens => {
+          const allTokens = [...prevTokens, ...completedTokens];
+          return allTokens.sort((a, b) => a.symbol.localeCompare(b.symbol));
+        });
+
+        // Clear processed incomplete tokens
+        setIncompleteTokens([]);
+
+        // Clear loading state
+        setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
+
+        console.debug(`Added ${completedTokens.length} tokens with onchain metadata`);
+      } else if (incompleteTokens.length > 0) {
+        // If there were incomplete tokens but none could be processed, clear them and loading state
+        setIncompleteTokens([]);
+        setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
+        console.warn('Failed to fetch onchain metadata for all incomplete tokens');
+      }
+    }
+  }, [isOnchainSuccess, onchainResults, incompleteTokens]);
+
   const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 
   const fetchAllTokens = useCallback(async () => {
     if (!address || !alchemyApiKey) return;
-    
+
     console.debug('Starting full token scan for address:', address);
     setLoadingState({
       phase: 'all',
@@ -190,40 +304,50 @@ export default function TokenBurner() {
           params: [address, 'erc20']
         })
       }, 3, (retryCount, maxRetries) => {
-        setLoadingState(prev => ({ 
-          ...prev, 
-          retryCount, 
-          message: `Retrying... (${retryCount}/${maxRetries})` 
+        setLoadingState(prev => ({
+          ...prev,
+          retryCount,
+          message: `Retrying... (${retryCount}/${maxRetries})`
         }));
       });
 
       const data = await response.json();
-      
+
       if (data.error) {
         throw new Error(`API Error: ${data.error.message}`);
       }
 
       const tokenBalances = data.result?.tokenBalances || [];
       const tokensWithBalance = tokenBalances.filter((token: any) => parseInt(token.tokenBalance, 16) > 0);
-      
+
       setLoadingState(prev => ({ ...prev, total: tokensWithBalance.length }));
-      
+
       const tokensWithMetadata: Token[] = [];
+      const incompleteTokensList: IncompleteToken[] = [];
       let processed = 0;
 
       for (const token of tokensWithBalance) {
         const metadata = await fetchTokenMetadata(token.contractAddress, alchemyApiKey, (retryCount, maxRetries) => {
-          setLoadingState(prev => ({ 
-            ...prev, 
-            retryCount, 
-            message: `Retrying metadata fetch... (${retryCount}/${maxRetries})` 
+          setLoadingState(prev => ({
+            ...prev,
+            retryCount,
+            message: `Retrying metadata fetch... (${retryCount}/${maxRetries})`
           }));
         });
+
         if (metadata) {
-          metadata.balance = token.tokenBalance;
-          tokensWithMetadata.push(metadata);
+          if ('needsOnchainFetch' in metadata) {
+            // This is an incomplete token
+            metadata.balance = token.tokenBalance;
+            incompleteTokensList.push(metadata);
+            console.debug(`Token ${token.contractAddress} marked for onchain metadata fetch`);
+          } else {
+            // This is a complete token
+            metadata.balance = token.tokenBalance;
+            tokensWithMetadata.push(metadata);
+          }
         }
-        
+
         processed++;
         setLoadingState(prev => ({
           ...prev,
@@ -232,15 +356,25 @@ export default function TokenBurner() {
         }));
       }
 
-      console.debug(`Found ${tokensWithMetadata.length} total tokens with balance`);
-      
-      // Sort tokens alphabetically by symbol
+      console.debug(`Found ${tokensWithMetadata.length} tokens with complete metadata, ${incompleteTokensList.length} tokens need onchain fetch`);
+
+      // Sort complete tokens alphabetically by symbol
       const sortedTokens = tokensWithMetadata.sort((a, b) => {
         return a.symbol.localeCompare(b.symbol);
       });
-      
+
       setTokens(sortedTokens);
-      setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
+      setIncompleteTokens(incompleteTokensList);
+
+      // If there are incomplete tokens, keep loading state active for onchain fetch
+      if (incompleteTokensList.length > 0) {
+        setLoadingState(prev => ({
+          ...prev,
+          message: `Fetching metadata for ${incompleteTokensList.length} tokens onchain...`
+        }));
+      } else {
+        setLoadingState({ phase: 'idle', progress: 0, total: 0, message: '', retryCount: 0 });
+      }
     } catch (err) {
       console.error('Full token fetch failed:', err);
       setError(`Failed to fetch all tokens: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -288,12 +422,12 @@ export default function TokenBurner() {
           }),
         };
       });
-      
+
       await sendCalls({
         calls,
         chainId: base.id,
       });
-      
+
     } catch (err) {
       setError(`Batched token burn failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
@@ -358,8 +492,8 @@ export default function TokenBurner() {
         <CardContent className="space-y-6">
           <div className="space-y-3">
             {selectedTokensList.map((token, index) => (
-              <div 
-                key={token.contractAddress} 
+              <div
+                key={token.contractAddress}
                 className="flex justify-between items-center p-4 bg-white border border-red-100 rounded-xl shadow-sm animate-slide-up"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
@@ -382,15 +516,15 @@ export default function TokenBurner() {
           <Separator className="bg-red-200" />
 
           <div className="flex gap-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setShowConfirmation(false)}
               disabled={isPending || isConfirming}
               className="flex-1 border-gray-300 hover:bg-gray-50"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleBurnTokens}
               disabled={isPending || isConfirming}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white"
@@ -436,7 +570,7 @@ export default function TokenBurner() {
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button 
+                <Button
                   onClick={() => {
                     setShowConfirmation(false);
                     setSelectedTokens(new Set());
@@ -446,7 +580,7 @@ export default function TokenBurner() {
                 >
                   Close
                 </Button>
-                <Button 
+                <Button
                   onClick={() => {
                     setShowConfirmation(false);
                     setSelectedTokens(new Set());
@@ -470,14 +604,14 @@ export default function TokenBurner() {
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <Button 
+                <Button
                   variant="outline"
                   onClick={() => setShowConfirmation(false)}
                   className="flex-1"
                 >
                   Go Back
                 </Button>
-                <Button 
+                <Button
                   onClick={() => {
                     setShowConfirmation(false);
                     setSelectedTokens(new Set());
@@ -489,7 +623,7 @@ export default function TokenBurner() {
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Refresh
                 </Button>
-                <Button 
+                <Button
                   onClick={handleBurnTokens}
                   disabled={isPending || isConfirming}
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white"
@@ -529,12 +663,12 @@ export default function TokenBurner() {
             </Badge>
           )}
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           {loadingState.phase !== 'idle' && (
             <div className="space-y-4">
-              <Progress 
-                value={(loadingState.progress / Math.max(loadingState.total, 1)) * 100} 
+              <Progress
+                value={(loadingState.progress / Math.max(loadingState.total, 1)) * 100}
                 className="w-full h-2"
               />
               <div className="text-center py-8 space-y-4">
@@ -611,13 +745,13 @@ export default function TokenBurner() {
                     <div className="flex items-center justify-center">
                       <Checkbox
                         checked={selectedTokens.has(token.contractAddress)}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(checked) =>
                           handleTokenSelect(token.contractAddress, checked as boolean)
                         }
                         className="h-6 w-6 border-2 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-500 data-[state=unchecked]:border-gray-400 data-[state=unchecked]:bg-gray-50"
                       />
                     </div>
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center gap-3">
                         <div className="space-y-1 min-w-0">
@@ -645,15 +779,15 @@ export default function TokenBurner() {
               <Separator />
 
               <div className="flex gap-4">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setSelectedTokens(new Set())}
                   disabled={selectedTokens.size === 0}
                   className="flex-1 border-gray-300"
                 >
                   Clear Selection
                 </Button>
-                <Button 
+                <Button
                   onClick={() => setShowConfirmation(true)}
                   disabled={selectedTokens.size === 0}
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg"
