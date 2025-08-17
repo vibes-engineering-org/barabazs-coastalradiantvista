@@ -36,7 +36,7 @@ export default async function RootLayout({
         <ThemeProviderClient>
           <Providers>
             <SidebarProvider>
-              <SidebarInset>
+              <SidebarInset className="overflow-hidden">
                 <header className="flex h-14 shrink-0 items-center gap-2 border-b">
                   <div className="flex flex-1 items-center gap-2 px-3">
                     <span className="ml-2 line-clamp-1">{PROJECT_TITLE}</span>

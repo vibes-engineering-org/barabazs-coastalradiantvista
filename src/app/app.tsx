@@ -6,7 +6,7 @@ import TokenBurner from "~/components/token-burner";
 export default function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-red-50/30">
-      <div className="w-full max-w-4xl mx-auto py-8 px-4 min-h-screen">
+      <div className="container mx-auto py-8 px-4 max-w-4xl">
         {/* TEMPLATE_CONTENT_START - Replace content below */}
         <div className="space-y-12">
           <div className="text-center space-y-4 animate-fade-in">
