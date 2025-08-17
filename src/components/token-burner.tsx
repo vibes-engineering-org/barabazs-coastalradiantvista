@@ -503,22 +503,22 @@ export default function TokenBurner() {
 
               <Separator />
 
-              <div className="flex gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
                 <Button
                   variant="outline"
                   onClick={() => setSelectedTokens(new Set())}
                   disabled={selectedTokens.size === 0}
-                  className="flex-1 border-gray-300"
+                  className="w-full sm:flex-1 border-gray-300"
                 >
                   Clear Selection
                 </Button>
                 <Button
                   onClick={() => setShowConfirmation(true)}
                   disabled={selectedTokens.size === 0}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg"
+                  className="w-full sm:flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg text-sm"
                 >
-                  <Flame className="mr-2 h-4 w-4" />
-                  Burn Selected ({selectedTokens.size})
+                  <Flame className="mr-2 h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">Burn Selected ({selectedTokens.size})</span>
                 </Button>
               </div>
             </>
